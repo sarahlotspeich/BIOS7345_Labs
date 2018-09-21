@@ -166,12 +166,15 @@ Do this by first sampling from two independent chi-square distributions
 
 ```{r}
 #sample from two independent chi-square distributions
+num <- rchisq(n = 1, df = df_num)
+denom <- rchisq(n = 1, df = df_denom)
 ```
 
 and work with the ratio of the observations.
 
 ```{r}
 #take the ratio
+f <- (num/df_num)/(denom/df_denom)
 ```
 
 Now, right a function `my_f()` that does the following: 
@@ -182,29 +185,35 @@ Now, right a function `my_f()` that does the following:
 
 ```{r}
 #now write a function
-
+my_f <- function(degrees_freedom_num, degrees_freedom_denom, ncp = 0)
+{
+  f <- (rchisq(n = 1, df = degrees_freedom_num, ncp = 2*ncp)/df_num)/(rchisq(n = 1, df = degrees_freedom_denom)/df_denom)
+  return(f)
+}
 #test your function
-
+my_f(df_num, df_denom)
 ```
 
 Use the `replicate()` function to create a vector of 10,000 random variable constructed using your `my_f()` function.
 
 ```{r}
 #use replicate to create a vector of F observartions
-
+central_obs <- replicate(n = num_obs,
+                         expr = my_f(df_num, df_denom))
 ```
 
 Plot the density of the observed F distribution with a range of 0 to 20 on the x-axis.
 
 ```{r}
 #plot your observations
+central_plot <- ggplot(data = data.frame(central_obs), aes(x = central_obs)) + geom_density() + xlim(c(0,20)) + ggtitle("F(2,20)")
 ```
 
 Verify that this density plot agrees with the true density for $F_{2,20}$ using the built in `df()` function.
 
 ```{r}
 #compare your density to the true density of a F(2,20)
-
+central_plot <- central_plot + stat_function(fun = df, args = list(df1 = df_num, df2 = df_denom), col = "red")
 ```
 
 ##b)
@@ -221,34 +230,37 @@ Do this by first sampling from two independent (possibly non-central) chi-square
 
 ```{r}
 #sample from chi-square
-
+num <- rchisq(n = 1, df = df_num, ncp = 2*lambda)
+denom <- rchisq(n = 1, df = df_denom)
 ```
 
 and work with the ratio of the observations.
 
 ```{r}
 #take the ratio
-
+f <- (num/df_num)/(denom/df_denom)
 ```
 
 Now, we can use our handy dandy `my_f()` function from above to create a vector of 10,000 non-central F observations.
 
 ```{r}
 #use my_f() and replicate() to create a vector of 10,000
+noncentral_obs <- replicate(n = num_obs,
+                           expr = my_f(df_num, df_denom, lambda))
 ```
 
-Plot the density of the observed non-central chi-square observations with a range of 0 to 60 on the x-axis.
+Plot the density of the observed non-central F observations with a range of 0 to 20 on the x-axis.
 
 ```{r}
 #plot the observations
-
+noncentral_plot <- ggplot(data = data.frame(noncentral_obs), aes(x = noncentral_obs)) + geom_density() + xlim(c(0,20)) + ggtitle(TeX("F (2, 20, $\\lambda$=2)"))
 ```
 
 Verify that this density plot agrees with the true density for $F_{2,20}(2)$ using the built in `df()` function. Recall: $\lambda$ in `R` is 2 times $\lambda$ in class (don't ask me why).
 
 ```{r}
 #compare your density to the true density of a F(2,20,2)
-
+noncentral_plot <- noncentral_plot + stat_function(fun = df, args = list(df1 = df_num, df2 = df_denom, ncp = 2*lambda), col = "red")
 ```
 
 ##c)
@@ -256,14 +268,17 @@ Compare the plots from **2a)** and **2b)**.
 
 ```{r}
 #plot central and non-central side-by-side
-
+ggarrange(central_plot, noncentral_plot)
 ```
 
 How do the mean and variance compare between the central and non-central F distributions? Let's append a row to our dataframe for the F distribution.
 
 ```{r}
 #append a row to your table for the F distribution
-
+tab <- rbind(tab,
+             data.frame(Dist = "F",
+                        Central = paste(round(mean(central_obs), 3), " (", round(var(central_obs),3), ")", sep = ""),
+                  NonCentral = paste(round(mean(noncentral_obs), 3), " (", round(var(noncentral_obs),3), ")", sep = "")))
 ```
 
 #T distribution
@@ -399,12 +414,19 @@ How do the mean and variance compare between the central and non-central t distr
 
 #Discussion
 
-Use the `xtable()` function to print a PDF-friendly version of your table comparing the mean/variance between the central and non-central versions of these distributions.
+Use the `xtable()` function to print a PDF-friendly version of your table comparing the mean/variance between the central and non-central versions of these distributions. 
 
 ```{r, results = 'asis'}
 #use xtable() to print your table
 #try to add a descriptive caption
+xtable(x = tab,
+       caption = "\\label{tab1}Comparing the mean/variance of central and non-central distributions.")
 
+print(
+  xtable(x = tab,
+       caption = "\\label{tab1}Comparing the mean/variance of central and non-central distributions."),
+  hline.after = c(1,2)
+)
 ```
 
 ##Chi-squared distribution

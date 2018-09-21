@@ -70,6 +70,7 @@ Spoiler alert: you won't know all of the names. Darn millenials.
 
 ```{r read in the dataset}
 stars <- read.csv(file = "https://query.data.world/s/xsweyho62srvyorzoly3w2uctn76rz", header=TRUE, stringsAsFactors = FALSE)
+head(stars)
 ```
 
 ##Objective
@@ -89,54 +90,70 @@ Now, begin fitting the model by restructuring these data into your response vect
 
 ```{r}
 #create response vector
+y <- as.matrix(stars$first_award_age, ncol = 1)
 
 #create design matrix using data.matrix()
-
+X <- stars %>% dplyr::mutate(Int = 1) %>% dplyr::select(Int, breakthrough_age) %>% data.matrix()
 ```
 
 Begin by estimating the model coefficients, $\pmb{\hat{\beta}} = \begin{bmatrix}\hat{\beta}_0 & \hat{\beta}_1 \end{bmatrix}^T$ according to the Rencher Theorem 7.3a: $$\pmb{\hat{\beta}} = (\pmb{X}^T\pmb{X})^{-1}\pmb{X}^T\pmb{y}.$$
 
 ```{r}
 #use matrix operations to calculate least-squares estimates beta0, beta1
+beta_hat <- solve(t(X) %*% X)%*%t(X)%*%y
 
 #for later, go ahead and round these to 3 digits
+beta_hat %<>% round(3)
 
+beta_hat
 ```
 
 Now we need an unbiased estimate for the variance of the error terms ($\sigma^2$), which we obtain using Rencher Equation (7.23): $$s^2 = \frac{1}{n-k-1}(\pmb{y}-\pmb{X\hat{\beta}})^T(\pmb{y}-\pmb{X\hat{\beta}}),$$ where $k = $ the number of predictors in your model and $n = $ sample size.
 
 ```{r}
 #sample size
+n <- X %>% nrow()
 
 #number of predictors (excl. intercept)
+k <- ncol(X) - 1
 
 #use (7.23) to estimate the variance of the error terms
-
+s2 <- (1/(n-k-1)) * t(y- X%*%beta_hat)%*%(y- X%*%beta_hat)
+s2
 ```
 
 The last thing this model needs are measures of uncertainty (e.g. standard errors) for the coefficient estimates. Using our estimate $s^2$ above, we can calculate these directly according to Rencher (7.27): $$\hat{Cov}(\hat{\pmb{\beta}}) = s^2(\pmb{X}^T\pmb{X})^{-1}.$$
 
 ```{r}
 #estimate the SEs for the estimated coefficients
+cov_beta_hat <- as.numeric(s2) * solve(t(X) %*% X)
 
 #round these off
+cov_beta_hat %<>% round(3)
 
+cov_beta_hat
 ```
 
 To wrap up this model let's make a nice table and print it using `xtable()` (which we totally remember from last week's lab). Recall: what do we need to add in the chunk header to make this print nicely? 
 
-```{r}
+```{r, results = 'asis'}
 #create a table for the model
+tab <- data.frame(Variable = c("Intercept", "Breakthrough"),
+                  Effect = beta_hat,
+                  SE = round(diag(sqrt(cov_beta_hat)), 3))
 
+tab
 ```
 
 Try using the `dplyr::mutate()` function to append columns for the Wald $Z$ test statistic and p-value for significance tests for $H_0: \beta_0 = 0$ and $H_0: \beta_1 = 1$. Consider using `ifelse()` to clean up the p-values if they're really small. 
 
 ```{r, results = 'asis'}
 #append Z test statistics and p-values
+tab %<>% dplyr::mutate(Z = round(Effect/SE, 3),
+                       P = 2*pnorm(abs(Z), lower.tail = FALSE))
 
 #print model table
-
+tab %>% xtable(caption = "Modeling age at first award on age at breakthrough.")
 ```
 
 Do future you a favor and put this into a function called `my_ls()` with parameters for the response vectors, `y`, the design matrix, `X`, and a caption for the model table to be printed.
@@ -153,7 +170,7 @@ For comparison, you may now fit this model using `rms::ols()`.
 
 ```{r}
 #fit the same model using ols()
-
+ols(formula = first_award_age ~ breakthrough_age, data = stars)
 ```
 
 ##Simple linear regression with one categorical predictor
@@ -218,55 +235,70 @@ Begin by plotting `breakthrough_age` against `first_award_age`.
 
 ```{r}
 #make a scatterplot of breakthrough_age vs. first_award_age
-
+mod_plot <- stars %>% ggplot(aes(x = breakthrough_age, y = first_award_age)) + geom_point()
 ```
 
 Manually calculate the predicted values for `first_award_age` based on your `beta_hat1` estimates for `breakthrough_age` from 10 to 55 years old. 
 
 ```{r}
 #create design matrix to predict age at first award for breakthrough ages 10-55
+X_pred <- data.frame(Int = 1,
+                     breakthrough_age = seq(10, 55, 1)) %>% 
+  data.matrix()
 
 #use matrix operations to predict y
-
+y_pred <- X_pred %*% beta_hat
 ```
 
 Add a line to your `mod1_plot` with the predicted values from the model. 
 
 ```{r}
 #create a dataframe with columns for x and predicted y
-
+pred_df <- data.frame(x = seq(10,55,1),
+                      y = y_pred)
 
 #add geom_line() layer to mod1_plot with the model predictions for first_award_age
-
+mod_plot <- mod_plot + geom_line(data = pred_df, aes(x = x, y = y), col = "blue", lty = 2)
 ```
 
 Lastly, let's add the model equation to the plot (because we're fancy). Before we put it into the plot, let's make sure we're comfortable with `paste()`. 
 
 ```{r, fig.cap = "\\label{fig:mod1}Modeling age at first award on breakthrough age using OLS regression."}
 #test your paste() statement to make sure you like how it looks
+my_mod_eq <- paste(beta_hat["Int", 1], " + ", beta_hat["breakthrough_age",1], "x", sep = "")
+my_mod_eq
 
 #now add an annotate() layer to mod1_plot with the model equation
+mod_plot <- mod_plot + annotate(geom = "text", x = 45, y = 72, label = my_mod_eq)
 
 #and print your plot
-
+mod_plot
 ```
 
 ##Invariance of predicted values to linear transformation
 Often, we like to transform predictors so that the coefficients can be interpreted more meaningfully. Say we're more interested in 5 year changes in `breakthrough_age` than 1 year changes. Let's transform `breakthrough_age`, refit model 1 (recall: `first_award_age ~ breakthrough_age`), and compare predicted values between the original and linearly transformed models. 
 
 ```{r}
-#add a column for breakthrough_age_centered by subtracting the median 
+#add a column for breakthrough_age_5yrs  
+stars %<>% dplyr::mutate(breakthrough_age_5yrs = breakthrough_age/5)
 
 #create the design matrix again
+X <- stars %>% dplyr::mutate(Int = 1) %>% dplyr::select(Int, breakthrough_age_5yrs) %>% data.matrix()
 
 #use matrix operations to calculate least-squares estimates beta0, beta1
+beta_hat_5yrs <- solve(t(X)%*%X)%*%t(X)%*%y
 
 #create design matrix to predict age at first award for breakthrough ages 10-55
+X_pred <- data.frame(Int = 1,
+                     breakthrough_age_5yrs = seq(10,55,1)/5) %>% 
+  data.matrix()
 
 #and predict first_award_age for ages 10-55 again using matrix operations
+y_pred_5yrs <- X_pred %*% beta_hat_5yrs
 
 #create a dataframe with columns for x and predicted y
-
+pred_df <- data.frame(x = seq(10,55,1)/5,
+                      y = y_pred_5yrs)
 ```
 
 Create the same plot as before with `breakthrough_age_5yrs` against `first_award_age`, overlaid with your transformed model predictions. Use `ggpubr:ggarrange()` to print this plot side-by-side with the original. 
@@ -281,7 +313,6 @@ Create the same plot as before with `breakthrough_age_5yrs` against `first_award
 ```
 
 This is follows from \textbf{Rencher Theorem 7.3e.} 
-
 
 ##Full rank transformation on predictor
 Take any full-rank $2 \times 2$ matrix $\pmb{K}_1$ (e.g. sampling the elements independently from a Normal distribution).
