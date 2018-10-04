@@ -1,0 +1,106 @@
+---
+title: "LAb5"
+author: "Sarah Lotspeich"
+date: "October 4, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, tidy = TRUE)
+
+#Run this, then delete it
+#install.packages("gmodels")
+
+#Load packages
+library(rms)
+library(ggplot2)
+library(magrittr)
+library(gmodels)
+```
+
+#Introduction
+A scientist named Dr. Bosenberg wanted to estimate the \underline{puncture distance for an epidural} in children by \underline{weight}. He regressed skin-to-epidural distance (`SED`) on weight (`WT`) and obtained a regression line. 
+
+#Fitting models
+```{r}
+#read in the data
+dat <- read.csv("https://raw.githubusercontent.com/sarahlotspeich/BIOS7345_Labs/master/Bios7345lab5.csv", 
+                header=TRUE, 
+                stringsAsFactors = FALSE)
+
+#fit the model for SED ~ WT
+mod <- ols(SED ~ WT, data = dat)
+```
+
+Create a plot of this regression line over the data. Begin by writing a simple function to predict `SED` for a given `WT` based on your `mod` coefficients.
+
+```{r}
+#write function to predict SED from WT
+est_SED <- function(x) return(mod$coefficients["Intercept"] + mod$coefficients["WT"]*x)
+
+#create a plot of the data
+my_plot <- dat %>% ggplot() + geom_point(aes(x = WT, y = SED), size = 2) + theme_bw()
+
+#overlay this plot with the regression line using stat_function()
+my_plot <- my_plot + stat_function(fun = est_SED, col = "red", lwd = 1, alpha = 0.8)
+```
+
+He then simplified his regression equation for clinicals to a 1mm/kg rule such that $\hat{\beta}_1 = 1$ and $\hat{\beta}_0 = 0$. Overlay your plot with the simplified model: $\hat{\text{WT}} = 0 + 1 \times \hat{\text{SED}}.$
+
+```{r}
+#use geom_abline() to overlay x = y line
+my_plot <- my_plot + geom_abline(slope = 1, intercept = 0, col = "blue", lwd = 1)
+
+#print your plot
+my_plot
+```
+
+#Testing coefficients
+
+Use the function `gmodels::estimable()` to obtain the estimates, SEs, and p-values for testing whether each regression coefficient equals 0 (i.e. those from the standard regression output). We are testing the following hypotheses: $$H_0: \pmb{\beta}^T\pmb{C} = \begin{bmatrix} \beta_0 & \beta_1 \end{bmatrix} = \begin{bmatrix} 0 & 0 \end{bmatrix} \text{ vs. } H_1: \pmb{\beta}^T\pmb{C} = \begin{bmatrix}\beta_0 & \beta_1 \end{bmatrix} \neq \begin{bmatrix} 0 & 0 \end{bmatrix}.$$
+
+What contrast matrix, $\pmb{C}$, will give us $\pmb{\beta}_{1 \times 2}^T\pmb{C} = \pmb{0}_{1 \times 2}$? 
+\begin{quote}
+To simultaneously test that $H_0: \beta_0 = \beta_1 = 0$, we need $\pmb{C} = \pmb{I}_2 = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$ so that $\pmb{\beta}_{1 \times 2}^T\pmb{C} = \pmb{\beta}_{1 \times 2}^T$. 
+\end{quote}
+
+Create the appropriate contrast matrix, `C`,
+
+```{r}
+C <- diag(1, nrow = 2, ncol = 2)
+```
+
+and use it as the `cm` input for `gmodels::estimable()`. For `beta0` input a vector for the null values of the parameters.
+
+```{r}
+estimable(obj = mod, cm = C, beta0 = c(0,0))
+```
+
+Compare this output to that from your model.
+
+```{r}
+#view model
+mod
+```
+
+Now, separately test the effect of `WT`, i.e. $$H_0: \beta_1 = 0 \text{ vs. } H_1: \beta_1 \neq 0.$$ What contrast matrix, $\pmb{C}$, will give us $\pmb{\beta}_{2 \times 1}\pmb{C} = \beta_1 = 0$? 
+\begin{quote}
+To test that $H_0: \beta_1 = 0$, we need $\pmb{C} = \begin{bmatrix} 0 & 1 \end{bmatrix}$ so that $\pmb{\beta}_{1 \times 2}^T\pmb{C} = 0\beta_0 + \beta_1 = \beta_1$. 
+\end{quote}
+
+Create the appropriate contrast matrix, `C`, and use `estimable()` to get the estimates, SEs, and p-values for this test.
+
+```{r}
+C <- matrix(c(0,1), nrow = 1)
+estimable(mod, cm = C, beta0 = 0)
+```
+
+Obtain the joint test of whether $\begin{bmatrix}\beta_0 & \beta_1 \end{bmatrix}^T = \begin{bmatrix}0 & 1 \end{bmatrix}^T$. 
+
+
+
+
+Do you think Dr. Bosenberg's simplification of the original model was a good idea? 
+
+
+
