@@ -1,0 +1,160 @@
+---
+title: "BIOS7345 Lab 3"
+Subtitle: "Centering"
+author: "Sarah Lotspeich"
+date: "21 September 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Frank's regression package
+library(rms)
+
+#all hail pipes
+library(magrittr)
+library(dplyr)
+```
+
+With the `Cereal.csv` data (on the GitHub), 
+
+```{r}
+cereal <- read.csv("~sarahlotspeich/Dropbox/Vanderbilt/Fall 2018/TA (Hakmook)/BIOS7345_Labs/Cereal.csv", header=TRUE, stringsAsFactors = FALSE)
+```
+
+use linear regression to regress cereal rating on calories and sugar without an interaction (use an intercept). You may use either `lm()` or `ols()`. 
+
+```{r}
+mod <- ols(rating ~ calories + sugars, data = cereal)
+```
+
+Give the interpretation of the parameter estimates. Try to use the `mod` object created above to dynamically code your coefficient estimates instead. 
+
+```{r}
+#access model coefficients
+mod$coefficients
+coefficients(mod)
+```
+
+  - $\beta_0:$ for a cereal with 0 calories and 0 sugars (gross) we expect a rating of `r mod$coefficients["Intercept"]`
+  - $\beta_1:$ for every 1-unit increase in calories, we expect a `r mod$coefficients["calories"]` change in rating
+  - $\beta_2:$ for every 1-unit increase in calories, we expect a `r mod$coefficients["sugars"]` change in rating
+
+*Pop quiz:* what do you call it when you estimate based on values that are far outside the observed (or realistic) range for your predictors? 
+  
+Does this intercept interpretation make sense? 
+
+\begin{quote}
+No, because there are not any cereals with 0 calories and 0 sugars. This is extrapolation!
+\end{quote}
+  
+Now, let's try centering both `sugars` and `calories` at their mean values
+
+```{r}
+cereal %<>% mutate(sugars_centered = sugars - mean(sugars),
+                   calories_centered = calories - mean(calories))
+```
+
+and refit the model above for `rating ~ calories + sugars`.
+
+```{r}
+mod_cent <- ols(rating ~ calories_centered + sugars_centered, data = cereal)
+```
+
+Given an interpretation of the intercept estimate. 
+
+  - $\beta_0$: for a cereal with `r mean(cereal$calories)` calories and `r mean(cereal$sugars)` sugars we expect a rating of `r mod_cent$coefficients["Intercept"]`
+
+After centering, we should have that $\hat{\beta}_0 = \bar{y}$. Check that this is true.
+
+```{r}
+mean(cereal$rating)
+```
+
+How do the effects of `sugars` and `calories` change with centering? 
+
+```{r}
+mod$coefficients
+mod_cent$coefficients
+```
+
+\begin{quote}
+Trick question -- they don't! As we saw last week, Rencher Theorem 7.3e. tells us that linear transformations of the predictors (in our case centering) does not change the estimated coefficients.
+\end{quote}
+
+What about the standard errors of these effects? How can we get the standard errors directly from the model object (e.g. not printing it or just typing `mod`)? 
+
+```{r}
+diag(sqrt(mod$var))
+
+diag(sqrt(mod_cent$var))
+```
+
+\begin{quote}
+Standard errors also do not change after centering.
+\end{quote}
+
+Round the covariance matrix of the centered model. What do we notice about the some of the off-diagonal entries?
+
+```{r}
+round(mod_cent$var, 5)
+```
+
+What is happening here? Think about the [1,2] element of the covariance matrix.
+\begin{eqnarray*}
+Cov(\hat{\beta}_0, \hat{\beta}_1) &=& Cov(\bar{y}, \hat{\beta}_1) \text{ since we saw that }\hat{\beta}_0 = \bar{y} above \\
+&\overset{def}{=}& E[(\bar{y} - E(\bar{y}))(\hat{\beta}_1 - E(\hat{\beta}_1))] \\
+&=& 0
+\end{eqnarray*}
+
+Now, divide the centered predictors by their standard deviations (to standardize them)
+
+```{r}
+cereal %<>% mutate(calories_stand = calories_centered/sd(calories),
+                   sugars_stand = sugars_centered/sd(sugars))
+```
+
+and refit the model above for `rating ~ calories + sugars`.
+
+```{r}
+mod_stand <- ols(rating ~ calories_stand + sugars_stand, data = cereal)
+```
+
+Given an interpretation of the intercept estimate. 
+
+  - $\beta_0$: for a cereal with `r mean(cereal$calories)` calories and `r mean(cereal$sugars)` sugars we expect a rating of `r mod_stand$coefficients["Intercept"]`
+  
+What do we notice about the intercept for the standardized model? 
+
+\begin{quote}
+It's the same as from the centered model! Why? Well, the centered (e.g. = 0) values of the predictors did not change when we divided them by their standard deviations.
+\end{quote}
+  
+Compare the $R^2$ values for the original, centered, and standardized models. What do you see? 
+
+```{r}
+round(mod$stats,5)
+round(mod_cent$stats,5)
+round(mod_stand$stats,5)
+```
+
+\begin{quote}
+Linearly transforming our predictors (either centering or standardizing) did not change the model fit from the original. 
+\end{quote}
+
+Show how to obtain the coefficients from the centered/scaled model as a function of the centered/unscaled coefficients and the standard deviation of the predictor variables (e.g. obtain $\pmb{\beta}_{cent,scaled}$ from $\pmb{\beta}_{cent,unscaled}$ and $s^2_{xi}$). 
+
+```{r}
+round(mod_cent$coefficients, 5)
+round(mod_stand$coefficients, 5)
+round(mod_cent$coefficients, 5)*c(1, sd(cereal$calories), sd(cereal$sugars))
+```
+
+Do the same for the SEs. 
+
+```{r}
+round(sqrt(diag(mod_cent$var)), 5)
+round(sqrt(diag(mod_stand$var)), 5)
+round(sqrt(diag(mod_cent$var)), 5)*c(1, sd(cereal$calories), sd(cereal$sugars))
+```
